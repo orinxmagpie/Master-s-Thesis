@@ -1,0 +1,170 @@
+---
+title: "Assessing Non-native Species’ Impacts on Nature’s Contributions to People:
+  A Meta-Analysis (Code). Sensitivity analysis"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(metafor) # main package for meta-analysis in R
+knitr::opts_knit$set(root.dir = 'C:/Users/ACER/Desktop/UniPotsdam/Spec+Master/R')
+data_no_dep_prop <- read.csv('C:/Users/ACER/Desktop/UniPotsdam/Spec+Master/R/data_cont.csv', header=TRUE, sep=',', dec='.' )
+data_prop <- read.csv('C:/Users/ACER/Desktop/UniPotsdam/Spec+Master/R/data_prop.csv', header=TRUE, sep=',', dec='.' )
+```
+
+```{r}
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Soil Quality"] <- "Soil fertility regulation"
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Freshwater quality"] <- "Water purification"
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Climate Change"] <- "Carbon storage and sequestration"
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Pollination"] <- "Pollination"
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Fire risk"] <- "Fire regulation"
+
+data_prop$ncp_1[data_prop$ncp_1 == "Regulating - Soil Quality"] <- "Soil fertility regulation"
+data_prop$ncp_1[data_prop$ncp_1 == "Regulating - Climate Change"] <- "Carbon storage and sequestration"
+data_prop$ncp_1[data_prop$ncp_1 == "Regulating - Pollination"] <- "Pollination"
+nrow(data_no_dep_prop)
+```
+
+```{r}
+#### exclusion of secondary proxies ####
+dat_primary <- subset(data_no_dep_prop, metric_strength == "Primary")
+nrow(dat_primary)
+ncps <- unique(data_no_dep_prop$ncp_1)
+m_overall <- rma.mv(
+  yi_dir,
+  vi,
+  random = ~ 1 | ID,
+  data = dat_primary,
+  method = "REML"
+)
+
+overall_df <- data.frame(
+  group = "Overall",
+  estimate = as.numeric(m_overall$b),
+  ci_lb = m_overall$ci.lb,
+  ci_ub = m_overall$ci.ub, 
+  pval = m_overall$pval
+)
+
+overall_df
+
+```
+
+```{r}
+# for prop data
+dat_primary <- subset(data_prop, metric_strength == "Primary")
+
+m_overall <- rma.mv(
+  yi_dir,
+  vi,
+  random = ~ 1 | ID,
+  data = dat_primary,
+  method = "REML"
+)
+
+overall_df <- data.frame(
+  group = "Overall",
+  estimate = as.numeric(m_overall$b),
+  ci_lb = m_overall$ci.lb,
+  ci_ub = m_overall$ci.ub, 
+  pval = m_overall$pval
+)
+
+overall_df
+```
+
+```{r}
+#### exclusion of extreme values vi ####
+threshold_90 <- quantile(data_no_dep_prop$vi, 0.90, na.rm = TRUE)
+dat_no_extreme_vi <- subset(data_no_dep_prop, vi <= threshold_90)
+nrow(dat_no_extreme_vi)
+m_overall <- rma.mv(
+  yi_dir,
+  vi,
+  random = ~ 1 | ID,
+  data = dat_no_extreme_vi,
+  method = "REML"
+)
+
+overall_df <- data.frame(
+  group = "Overall",
+  estimate = as.numeric(m_overall$b),
+  ci_lb = m_overall$ci.lb,
+  ci_ub = m_overall$ci.ub, 
+  pval = m_overall$pval
+)
+overall_df
+
+```
+
+```{r}
+
+threshold_10 <- quantile(data_no_dep_prop$vi, 0.10, na.rm = TRUE)
+dat_no_extreme_vi <- subset(data_no_dep_prop, vi >= threshold_10)
+nrow(dat_no_extreme_vi)
+m_overall <- rma.mv(
+  yi_dir,
+  vi,
+  random = ~ 1 | ID,
+  data = dat_no_extreme_vi,
+  method = "REML"
+)
+
+overall_df <- data.frame(
+  group = "Overall",
+  estimate = as.numeric(m_overall$b),
+  ci_lb = m_overall$ci.lb,
+  ci_ub = m_overall$ci.ub, 
+  pval = m_overall$pval
+)
+nrow(dat_no_extreme_vi)
+overall_df
+```
+
+
+```{r}
+#for prop data
+data_pol <- subset(data_prop, ncp_1 == "Pollination")
+threshold_90 <- quantile(data_pol$vi, 0.90, na.rm = TRUE)
+dat_no_extreme_vi <- subset(data_pol, vi <= threshold_90)
+nrow(data_pol)
+nrow(dat_no_extreme_vi)
+m_overall <- rma.mv(
+  yi_dir,
+  vi,
+  random = ~ 1 | ID,
+  data = dat_no_extreme_vi,
+  method = "REML"
+)
+
+overall_df <- data.frame(
+  group = "Overall",
+  estimate = as.numeric(m_overall$b),
+  ci_lb = m_overall$ci.lb,
+  ci_ub = m_overall$ci.ub, 
+  pval = m_overall$pval
+)
+
+threshold_10 <- quantile(data_pol$vi, 0.10, na.rm = TRUE)
+dat_no_extreme_vi <- subset(data_pol, vi >= threshold_10)
+nrow(dat_no_extreme_vi)
+m_overall <- rma.mv(
+  yi_dir,
+  vi,
+  random = ~ 1 | ID,
+  data = dat_no_extreme_vi,
+  method = "REML"
+)
+
+overall_df <- data.frame(
+  group = "Overall",
+  estimate = as.numeric(m_overall$b),
+  ci_lb = m_overall$ci.lb,
+  ci_ub = m_overall$ci.ub, 
+  pval = m_overall$pval
+)
+overall_df
+```
+

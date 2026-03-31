@@ -1,0 +1,194 @@
+---
+title: "Assessing Non-native Species’ Impacts on Nature’s Contributions to People:
+  A Meta-Analysis (Code). Setup"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(metafor) # main package for meta-analysis in R
+knitr::opts_knit$set(root.dir = 'C:/Users/ACER/Desktop/UniPotsdam/Spec+Master/R')
+```
+Reading in the data
+```{r, warning=FALSE, message=FALSE}
+#### QA ####
+# reading in the data
+raw <- read.csv('data/RawR2.csv', header=TRUE, sep=',', dec='.' )
+str(raw)
+colMeans(is.na(raw))
+raw <- raw %>%
+  mutate(
+    effect_size_ready = !is.na(Treatment_mean) &
+      !is.na(Control_mean) &
+      !is.na(SD_t_transformed) &
+      !is.na(SD_c_transformed) &
+      Treatment_sample_size > 1 & Control_sample_size > 1
+  )
+table(raw$effect_size_ready)
+## QA was successful: all 451 observations are ready for effect size calculations
+raw <- raw %>%
+  mutate(ratio = Treatment_mean / Control_mean)
+```
+QA was successful: all 434 observations are ready for effect size calculations.
+Some ratios are higher than 10, but it's ecologically correct. Invasions can cause order-of-magnitude changes (common for fluxes, nutrients, reproduction). Some ratios are inf, when control was 0, which also can happen
+```{r, warning=FALSE, message=FALSE}
+#### Deleting unnecessary columns and rows ####
+# taking out unnecessary columns
+list(colnames(raw))
+cols <- c("ID","Title","Authors","Year", "Journal", "Region", "Coordinates", "Ecoregion", 
+          "Ecosystem_type", "Climate", "Invader_species_name", "Invader_origin", "Invader_growth_form", 
+          "Invader_functional_category", "Invader_life_span", "Invader_movement_capacity", "body_size", 
+          "Invader_residence_time", "Affected_species", "Affected_growth_form", "Experiment_duration", "Study_type",
+          "ecosystem_compartment", "ncp_1", "directionality",  "Response_functional_group", "Response_variable",
+          "Response_variable_type", "Treatment_vs_Control","Treatment_name", "Treatment_source", "Treatment_mean", 
+          "Treatment_UoM", "SD_t_transformed", "Treatment_sample_size", "Control_name", "Control_source", "Control_mean",
+          "Control_UoM", "SD_c_transformed", "Control_sample_size", "metric_strength" )
+data_cleaned <- raw[ , cols]
+#deleting proxies that have less than  in count
+proxy_counts <- table(data_cleaned$Response_variable)
+proxies_keep <- names(proxy_counts[proxy_counts >= 5])
+data_ready <- data_cleaned[data_cleaned$Response_variable %in% proxies_keep, ]
+data_ready$ncp_1[data_ready$ncp_1 == "Regulating - Soil quality"] <- "Regulating - Soil Quality"
+unique(data_ready$ncp_1)
+save(data, file="data_ready.Rdata")
+write.csv(data_ready, file = "data_ready.csv", row.names = FALSE)
+summary(data_ready$SD_t_transformed)
+summary(data_ready$Treatment_mean)
+summary(data_ready$SD_c_transformed)
+summary(data_ready$Control_mean)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+#### Effect sizes ####
+#data_ready <- data
+data <- data_ready
+data_ready$yi <- NA_real_   # effect size
+data_ready$vi <- NA_real_   # variance
+data_ready$es_type <- NA_character_
+# it's done to ensure everything stays on the table
+
+# continuous data is handled with Hedges's 
+idx_cont <- data$Response_variable_type == "Continuous"
+
+es_cont <- escalc(
+  measure = "SMD",           # standardized mean difference
+  m1i = data$Treatment_mean[idx_cont],
+  sd1i = data$SD_t_transformed[idx_cont],
+  n1i = data$Treatment_sample_size[idx_cont],
+  m2i = data$Control_mean[idx_cont],
+  sd2i = data$SD_c_transformed[idx_cont],
+  n2i = data$Control_sample_size[idx_cont],
+  vtype = "UB"               # unbiased (Hedges' g)
+)
+
+data$yi[idx_cont] <- es_cont$yi
+data$vi[idx_cont] <- es_cont$vi
+data$es_type[idx_cont] <- "Hedges_g"
+
+# proportional data is handled with lnRR
+idx_prop <- data$Response_variable_type == "Proportional"
+
+es_prop <- escalc(
+  measure = "ROM",           # ln response ratio
+  m1i = data$Treatment_mean[idx_prop],
+  sd1i = data$SD_t_transformed[idx_prop],
+  n1i = data$Treatment_sample_size[idx_prop],
+  m2i = data$Control_mean[idx_prop],
+  sd2i = data$SD_c_transformed[idx_prop],
+  n2i = data$Control_sample_size[idx_prop]
+)
+
+data$yi[idx_prop] <- es_prop$yi
+data$vi[idx_prop] <- es_prop$vi
+data$es_type[idx_prop] <- "lnRR"
+
+# I missed count data
+idx_count <- data$Response_variable_type == "Count"
+
+es_count <- escalc(
+  measure = "SMD",           # standardized mean difference
+  m1i = data$Treatment_mean[idx_count],
+  sd1i = data$SD_t_transformed[idx_count],
+  n1i = data$Treatment_sample_size[idx_count],
+  m2i = data$Control_mean[idx_count],
+  sd2i = data$SD_c_transformed[idx_count],
+  n2i = data$Control_sample_size[idx_count],
+  vtype = "UB"               # unbiased (Hedges' g)
+)
+
+data$yi[idx_count] <- es_count$yi
+data$vi[idx_count] <- es_count$vi
+data$es_type[idx_count] <- "Hedges_g"
+
+sum(is.na(data$yi))
+summary(data$yi)
+summary(data$vi)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+#### Harmonising directionality ####
+unique(data$Response_functional_group)
+data_ready$directionality <- tolower(trimws(data_ready$directionality))
+table(data_ready$directionality)
+data_pos <- data_ready[data_ready$directionality == "positive", ]
+data_neg <- data_ready[data_ready$directionality == "negative", ]
+data$yi_dir <- data$yi
+data$yi_dir[data$directionality == "negative"] <-
+  -data$yi_dir[data$directionality == "negative"]
+tapply(data$yi_dir, data$directionality, mean, na.rm = TRUE)
+#excluding context-dependent functional groups of response variables
+data_prop <- data[data$Response_variable_type == "Proportional", ]
+table(data_prop$Response_functional_group)
+
+data_no_dep_prop <- data[data$Response_variable_type != "Proportional", ]
+table(data_no_dep_prop$Response_functional_group)
+# test <- data_no_dep[data_no_dep$Response_functional_group == "N-mineralisation",]
+
+write.csv(data_prop, file = "data_prop.csv", row.names = FALSE)
+write.csv(data_no_dep_prop, file = "data_cont.csv", row.names = FALSE)
+data_no_dep_prop <- read.csv('data_cont.csv', header=TRUE, sep=',', dec='.' )
+
+colnames(data_no_dep_prop)
+unique(data_no_dep_prop$Response_functional_group)
+
+article_level <- data_no_dep_prop[!duplicated(data_no_dep_prop$ID), ]
+ncp_counts <- table(article_level$ncp_1)
+par(mar = c(5, 5, 4, 2))  # widen left margin
+
+```
+
+```{r}
+cross_tab <- table(article_level$ncp_1,
+                   article_level$Ecoregion)
+my_cols <- c(
+  "#41AB5D",
+  "#BD0026",
+  "#7FCDBB",  # green
+  "#FEB24C",  # orange
+  "#2C7FB8"
+)
+
+par(mar = c(7, 5, 4, 16))
+bp <- barplot(
+  cross_tab,
+  beside = FALSE,
+  col = my_cols,
+  las = 2,
+  ylab = "Number of articles",
+  main = "Studies by NCP and ecosystem type"
+)
+
+legend(
+  "topright",
+  inset = c(-0.4, 0),   # push legend outside
+  legend = rownames(cross_tab),
+  fill = my_cols,
+  bty = "n",
+  xpd = TRUE
+)
+```
+

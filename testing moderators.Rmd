@@ -1,0 +1,2245 @@
+---
+title: "Assessing Non-native Species’ Impacts on Nature’s Contributions to People:
+  A Meta-Analysis (Code). Full model Overall effect"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(metafor) # main package for meta-analysis in R
+knitr::opts_knit$set(root.dir = 'C:/Users/ACER/Desktop/UniPotsdam/Spec+Master/R')
+data_no_dep_prop <- read.csv('C:/Users/ACER/Desktop/UniPotsdam/Spec+Master/R/data_cont.csv', header=TRUE, sep=',', dec='.' )
+data_prop <- read.csv('C:/Users/ACER/Desktop/UniPotsdam/Spec+Master/R/data_prop.csv', header=TRUE, sep=',', dec='.' )
+```
+
+```{r}
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Soil Quality"] <- "Soil fertility regulation"
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Freshwater quality"] <- "Water purification"
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Climate Change"] <- "Carbon storage and sequestration"
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Pollination"] <- "Pollination"
+data_no_dep_prop$ncp_1[data_no_dep_prop$ncp_1 == "Regulating - Fire risk"] <- "Fire regulation"
+
+data_prop$ncp_1[data_prop$ncp_1 == "Regulating - Soil Quality"] <- "Soil fertility regulation"
+data_prop$ncp_1[data_prop$ncp_1 == "Regulating - Climate Change"] <- "Carbon storage and sequestration"
+data_prop$ncp_1[data_prop$ncp_1 == "Regulating - Pollination"] <- "Pollination"
+# alingning of the names of species
+data_no_dep_prop$Invader_species_name[data_no_dep_prop$Invader_species_name == "D. polymorpha"] <- "Dreissena polymorpha"
+data_no_dep_prop$Invader_species_name[data_no_dep_prop$Invader_species_name == "D. polymorpha/D. rostriformis bugensis"] <- "Dreissena polymorpha"
+data_no_dep_prop$Invader_species_name[data_no_dep_prop$Invader_species_name == "Robinia pseudoacacia L."] <- "Robinia pseudoacacia"
+data_no_dep_prop$Invader_species_name[data_no_dep_prop$Invader_species_name == "Chromoleana odorata"] <- "Chromolaena odorata"
+data_no_dep_prop$Invader_species_name[data_no_dep_prop$Invader_species_name == "Lumbricus rubellus"] <- "Lumbricus spp."
+data_no_dep_prop$Invader_species_name[data_no_dep_prop$Invader_species_name == "Aporrectodea spp. and Lumbricus spp."] <- "Lumbricus spp."
+data_no_dep_prop$Invader_species_name[data_no_dep_prop$Invader_species_name == "Robinia presudoacacia"] <- "Robinia presudoacacia"
+data_no_dep_prop$Invader_species_name[data_no_dep_prop$Invader_species_name == "Robinia presudoacacia"] <- "Robinia pseudoacacia"
+
+```
+
+```{r}
+ncps <- unique(data_no_dep_prop$ncp_1)
+ncps
+unique(data_no_dep_prop$Ecoregion)
+
+data_no_dep_prop$Ecoregion <-
+  factor(data_no_dep_prop$Ecoregion)
+
+mod_results_a5 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$Ecoregion <- droplevels(dat_ncp$Ecoregion)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$Ecoregion) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ Ecoregion - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$Ecoregion,
+                        length)
+  
+  groups_clean <- gsub("Ecoregion", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-2, 1)
+  } else if (n == "Carbon storage and sequestration") {
+    arrow_length <- 3
+    alim_use <- c(-7, 7)
+  } else {
+    arrow_length <- 2
+    alim_use <- c(-5, 10)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  # change if neede 
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a5 <- rbind(
+      mod_results_a5,
+      data.frame(
+        ncp = n,
+        moderator = "Ecoregion",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+mod_results_a5
+write.csv(mod_results_a5,
+          "moderator_Ecoregion_results.csv",
+          row.names = FALSE)
+```
+
+```{r}
+unique(data_no_dep_prop$Climate)
+data_no_dep_prop$climate_group <- NA
+data_no_dep_prop$climate_group[data_no_dep_prop$Climate %in% c(
+  "Oceanic", "temperate oceanic"
+)] <- "oceanic"
+data_no_dep_prop$climate_group[data_no_dep_prop$Climate %in% c(
+  "Temperate",
+  "Continental",
+  "Temperate continental",
+  "Transitional",
+  "Humid?"  
+)] <- "temperate"
+data_no_dep_prop$climate_group[data_no_dep_prop$Climate %in% c(
+  "Arid",
+  "Arid/semi-arid"
+)] <- "arid"
+data_no_dep_prop$climate_group[data_no_dep_prop$Climate %in% c(
+  "Arctic",
+  "Sub-Arctic"
+)] <- "cold"
+data_no_dep_prop$climate_group[data_no_dep_prop$Climate %in% c(
+  "Mediterenean"
+)] <- "mediterranean"
+data_no_dep_prop$climate_group[data_no_dep_prop$Climate %in% c(
+  "Tropical",
+  "Subtropical",
+  "(Sub)tropical",
+  "Tropical savanna"
+)] <- "tropical_subtropical"
+data_no_dep_prop$climate_group <- factor(data_no_dep_prop$climate_group)
+
+mod_results_a3 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$climate_group <- droplevels(dat_ncp$climate_group)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$climate_group) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ climate_group - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$climate_group,
+                        length)
+
+  groups_clean <- gsub("climate_group", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-2, 2)
+  }  else if (n == "Pollination") {
+    arrow_length <- 1
+    alim_use <- c(-1, 4) 
+  } else if (n == "Fire regulation") {
+    arrow_length <- 2.5
+    alim_use <- c(-8, 4) 
+  }  else {
+    arrow_length <- 2.5
+    alim_use <- c(-8, 8)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  # change if neede 
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a3 <- rbind(
+      mod_results_a3,
+      data.frame(
+        ncp = n,
+        moderator = "climate_group",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+mod_results_a3
+write.csv(mod_results_a3,
+          "moderator_climate_group_results.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+## for prop - pollination
+
+unique(data_prop$Climate)
+data_prop$climate_group <- NA
+data_prop$climate_group[data_prop$Climate %in% c(
+  "Oceanic", "temperate oceanic"
+)] <- "oceanic"
+data_prop$climate_group[data_prop$Climate %in% c(
+  "Temperate",
+  "Continental",
+  "Temperate continental",
+  "Transitional",
+  "Humid?"  
+)] <- "temperate"
+data_prop$climate_group[data_prop$Climate %in% c(
+  "Arid",
+  "Arid/semi-arid"
+)] <- "arid"
+data_prop$climate_group[data_prop$Climate %in% c(
+  "Arctic",
+  "Sub-Arctic"
+)] <- "cold"
+data_prop$climate_group[data_prop$Climate %in% c(
+  "Mediterenean"
+)] <- "mediterranean"
+data_prop$climate_group[data_prop$Climate %in% c(
+  "Tropical",
+  "Subtropical",
+  "(Sub)tropical",
+  "Tropical savanna"
+)] <- "tropical_subtropical"
+data_prop$climate_group <- factor(data_prop$climate_group)
+
+mod_results_a3p <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_prop[data_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$climate_group <- droplevels(dat_ncp$climate_group)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$climate_group) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ climate_group - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$climate_group,
+                        length)
+  
+  groups_clean <- gsub("climate_group", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+ 
+    arrow_length <- 0.5
+    alim_use <- c(-0.5, 1)
+
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (ln RR)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  # change if neede 
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a3p <- rbind(
+      mod_results_a3p,
+      data.frame(
+        ncp = n,
+        moderator = "climate_group",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+mod_results_a3p
+write.csv(mod_results_a3p,
+          "moderator_climate_group_results_prop.csv",
+          row.names = FALSE)
+```
+
+```{r}
+unique(data_no_dep_prop$Invader_origin)
+data_no_dep_prop$Invader_origin <- tolower(trimws(data_no_dep_prop$Invader_origin))
+data_no_dep_prop$Invader_origin[data_no_dep_prop$Invader_origin == "-"] <- NA
+data_no_dep_prop$continent <- NA
+data_no_dep_prop$continent[data_no_dep_prop$Invader_origin %in% c(
+  "europe", "eastern europe", "southern europe",
+  "eurasia", "mediterranean",
+  "northern hemisphere", "red sea"
+)] <- "Europe"
+data_no_dep_prop$continent[data_no_dep_prop$Invader_origin %in% c(
+  "asia", "east asia"
+)] <- "Asia"
+data_no_dep_prop$continent[data_no_dep_prop$Invader_origin %in% c(
+  "north america", "us"
+)] <- "North America"
+data_no_dep_prop$continent[data_no_dep_prop$Invader_origin %in% c(
+  "south america", "central america"
+)] <- "South America"
+data_no_dep_prop$continent[data_no_dep_prop$Invader_origin %in% c(
+  "australia", "pacific ocean"
+)] <- "Australia and Oceania"
+data_no_dep_prop$continent[data_no_dep_prop$Invader_origin %in% c(
+  "africa", "south africa"
+)] <- "Africa"
+
+data_no_dep_prop$continent <- factor(data_no_dep_prop$continent)
+table(data_no_dep_prop$continent, useNA = "ifany")
+
+mod_results_a8 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$continent <- droplevels(dat_ncp$continent)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$continent) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ continent - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$continent,
+                        length)
+  
+  groups_clean <- gsub("continent", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-2, 0.5)
+  }  else if (n == "Pollination") {
+    arrow_length <- 1
+    alim_use <- c(-1, 4) 
+  } else if (n == "Fire regulation") {
+    arrow_length <- 2.5
+    alim_use <- c(-8, 4) 
+  }  else {
+    arrow_length <- 2.5
+    alim_use <- c(-8, 8)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  # change if neede 
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a8 <- rbind(
+      mod_results_a8,
+      data.frame(
+        ncp = n,
+        moderator = "continent",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+write.csv(mod_results_a8,
+          "moderator_continent_results.csv",
+          row.names = FALSE)
+```
+
+```{r}
+## for prop data
+unique(data_prop$Invader_origin)
+data_prop$Invader_origin <- tolower(trimws(data_prop$Invader_origin))
+data_prop$Invader_origin[data_prop$Invader_origin == "-"] <- NA
+data_prop$continent <- NA
+data_prop$continent[data_prop$Invader_origin %in% c(
+  "europe", "eastern europe", "southern europe",
+  "eurasia", "mediterranean",
+  "northern hemisphere", "red sea"
+)] <- "Europe"
+data_prop$continent[data_prop$Invader_origin %in% c(
+  "asia", "east asia"
+)] <- "Asia"
+data_prop$continent[data_prop$Invader_origin %in% c(
+  "north america", "us"
+)] <- "North America"
+data_prop$continent[data_prop$Invader_origin %in% c(
+  "south america", "central america"
+)] <- "South America"
+data_prop$continent[data_prop$Invader_origin %in% c(
+  "australia", "pacific ocean"
+)] <- "Australia and Oceania"
+data_prop$continent[data_prop$Invader_origin %in% c(
+  "africa", "south africa"
+)] <- "Africa"
+
+data_prop$continent <- factor(data_prop$continent)
+table(data_prop$continent, useNA = "ifany")
+
+mod_results_a8p <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_prop[data_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$continent <- droplevels(dat_ncp$continent)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$continent) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ continent - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$continent,
+                        length)
+  
+  groups_clean <- gsub("continent", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  
+    arrow_length <- 0.5
+    alim_use <- c(-0.5, 1)
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  # change if neede 
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a8p <- rbind(
+      mod_results_a8p,
+      data.frame(
+        ncp = n,
+        moderator = "continent",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+write.csv(mod_results_a8p,
+          "moderator_continent_results_prop.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+unique(data_no_dep_prop$Invader_functional_category)
+ncps <- unique(data_no_dep_prop$ncp_1)
+# grouping to narrower categories
+data_no_dep_prop$Invader_functional_category <- tolower(trimws(data_no_dep_prop$Invader_functional_category))
+data_no_dep_prop$functional_group4 <- NA
+data_no_dep_prop$functional_group4[data_no_dep_prop$Invader_functional_category %in% c(
+  "tree", "shrub", "shrub/tree", "mangrove", "bamboo"
+)] <- "woody_plant"
+data_no_dep_prop$functional_group4[data_no_dep_prop$Invader_functional_category %in% c(
+  "grass", "herb", "forb", "weed", "legume",
+  "fern", "swamp plant", "seagrass", "macroalgae"
+)] <- "nonwoody_plant"
+data_no_dep_prop$functional_group4[data_no_dep_prop$Invader_functional_category %in% c(
+  "fish", "mammal"
+)] <- "vertebrate"
+data_no_dep_prop$functional_group4[data_no_dep_prop$Invader_functional_category %in% c(
+  "earthworm", "tubeworm", "mollusk",
+  "crayfish", "insect", "slug"
+)] <- "invertebrate"
+data_no_dep_prop$functional_group4 <- factor(data_no_dep_prop$functional_group4)
+table(data_no_dep_prop$functional_group4, useNA = "ifany")
+
+mod_results_a7 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$functional_group4 <- droplevels(dat_ncp$functional_group4)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$functional_group4) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ functional_group4 - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$functional_group4,
+                        length)
+  
+  groups_clean <- gsub("functional_group4", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-4, 0.5)
+  }   else {
+    arrow_length <- 2
+    alim_use <- c(-4, 4)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a7 <- rbind(
+      mod_results_a7,
+      data.frame(
+        ncp = n,
+        moderator = "functional_group4",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+write.csv(mod_results_a7,
+          "moderator_functional_group_results.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+unique(data_prop$ncp_1)
+ncps <- unique(data_prop$ncp_1)
+
+unique(data_prop$Invader_functional_category)
+# grouping to narrower categories
+data_prop$Invader_functional_category <- tolower(trimws(data_prop$Invader_functional_category))
+data_prop$functional_group4 <- NA
+data_prop$functional_group4[data_prop$Invader_functional_category %in% c(
+  "tree", "shrub", "shrub/tree", "mangrove", "bamboo"
+)] <- "woody_plant"
+data_prop$functional_group4[data_prop$Invader_functional_category %in% c(
+  "grass", "herb", "forb", "weed", "legume",
+  "fern", "swamp plant", "seagrass", "macroalgae"
+)] <- "nonwoody_plant"
+data_prop$functional_group4[data_prop$Invader_functional_category %in% c(
+  "fish", "mammal"
+)] <- "vertebrate"
+data_prop$functional_group4[data_prop$Invader_functional_category %in% c(
+  "earthworm", "tubeworm", "mollusk","bee",
+  "crayfish", "insect", "slug"
+)] <- "invertebrate"
+data_prop$functional_group4 <- factor(data_prop$functional_group4)
+table(data_prop$functional_group4, useNA = "ifany")
+
+mod_results_a7p <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_prop[data_prop$ncp_1 == n, ]
+
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$functional_group4 <- droplevels(dat_ncp$functional_group4)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$functional_group4) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ functional_group4 - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$functional_group4,
+                        length)
+  
+  groups_clean <- gsub("functional_group4", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+ 
+    arrow_length <- 0.5
+    alim_use <- c(-1, 1)
+  
+
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (ln RR)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a7p <- rbind(
+      mod_results_a7p,
+      data.frame(
+        ncp = n,
+        moderator = "functional_group4",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+write.csv(mod_results_a7p,
+          "moderator_functional_group_results_prop.csv",
+          row.names = FALSE)
+```
+
+```{r}
+data_no_dep_prop$metric_strength <-
+  factor(data_no_dep_prop$metric_strength)
+
+mod_results_a6 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$metric_strength <- droplevels(dat_ncp$metric_strength)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$metric_strength) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ metric_strength - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$metric_strength,
+                        length)
+  
+  groups_clean <- gsub("metric_strength", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+    arrow_length <- 2
+    alim_use <- c(-4, 4)
+
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a6 <- rbind(
+      mod_results_a6,
+      data.frame(
+        ncp = n,
+        moderator = "metric_strength",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+
+write.csv(mod_results_a6,
+          "moderator_metric_strength_results.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+unique(data_no_dep_prop$Invader_life_span)
+ncps <- unique(data_no_dep_prop$ncp_1)
+data_no_dep_prop$Invader_life_span <- factor(data_no_dep_prop$Invader_life_span)
+mod_results_a9 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$Invader_life_span <- droplevels(dat_ncp$Invader_life_span)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$Invader_life_span) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ Invader_life_span - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$Invader_life_span,
+                        length)
+  
+  groups_clean <- gsub("Invader_life_span", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-4, 0.5)
+  }   else {
+    arrow_length <- 2
+    alim_use <- c(-4, 4)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a9 <- rbind(
+      mod_results_a9,
+      data.frame(
+        ncp = n,
+        moderator = "Invader_life_span",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+write.csv(mod_results_a7,
+          "moderator_functional_group_results.csv",
+          row.names = FALSE)
+```
+
+```{r}
+unique(data_no_dep_prop$Invader_movement_capacity)
+ncps <- unique(data_no_dep_prop$ncp_1)
+data_no_dep_prop$Invader_movement_capacity <- factor(data_no_dep_prop$Invader_movement_capacity)
+mod_results_a10 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$Invader_movement_capacity <- droplevels(dat_ncp$Invader_movement_capacity)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$Invader_movement_capacity) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ Invader_movement_capacity - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$Invader_movement_capacity,
+                        length)
+  
+  groups_clean <- gsub("Invader_movement_capacity", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-4, 0.5)
+  }   else {
+    arrow_length <- 2
+    alim_use <- c(-8, 8)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a10 <- rbind(
+      mod_results_a10,
+      data.frame(
+        ncp = n,
+        moderator = "Invader_movement_capacity",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+write.csv(mod_results_a7,
+          "moderator_functional_group_results.csv",
+          row.names = FALSE)
+```
+
+```{r}
+unique(data_no_dep_prop$body_size)
+ncps <- unique(data_no_dep_prop$ncp_1)
+data_no_dep_prop$body_size <- factor(data_no_dep_prop$body_size)
+mod_results_a11 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$body_size <- droplevels(dat_ncp$body_size)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$body_size) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ body_size - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$body_size,
+                        length)
+  
+  groups_clean <- gsub("body_size", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-4, 0.5)
+  }   else {
+    arrow_length <- 2
+    alim_use <- c(-8, 8)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a11 <- rbind(
+      mod_results_a11,
+      data.frame(
+        ncp = n,
+        moderator = "body_size",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+```
+
+```{r}
+unique(data_no_dep_prop$Response_functional_group)
+ncps <- unique(data_no_dep_prop$ncp_1)
+data_no_dep_prop$Response_functional_group <- factor(data_no_dep_prop$Response_functional_group)
+mod_results_a13 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$Response_functional_group <- droplevels(dat_ncp$Response_functional_group)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$Response_functional_group) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ Response_functional_group - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$Response_functional_group,
+                        length)
+  
+  groups_clean <- gsub("Response_functional_group", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-3, 3)
+  }   else {
+    arrow_length <- 2
+    alim_use <- c(-8, 8)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a13 <- rbind(
+      mod_results_a13,
+      data.frame(
+        ncp = n,
+        moderator = "Response_functional_group",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+m_mod$sigma2
+```
+
+```{r}
+## for prop data
+unique(data_prop$Response_functional_group)
+ncps <- unique(data_prop$ncp_1)
+data_prop$Response_functional_group <- factor(data_prop$Response_functional_group)
+mod_results_a13a <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_prop[data_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$Response_functional_group <- droplevels(dat_ncp$Response_functional_group)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$Response_functional_group) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ Response_functional_group - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$Response_functional_group,
+                        length)
+  
+  groups_clean <- gsub("Response_functional_group", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 0.5
+    alim_use <- c(-3, 3)
+  }   else {
+    arrow_length <- 0.5
+    alim_use <- c(-8, 8)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a13a <- rbind(
+      mod_results_a13a,
+      data.frame(
+        ncp = n,
+        moderator = "Response_functional_group",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+```
+
+```{r}
+unique(data_no_dep_prop$Region)
+data_no_dep_prop$Region <- tolower(trimws(data_no_dep_prop$Region))
+data_no_dep_prop$Region[data_no_dep_prop$Region == "-"] <- NA
+data_no_dep_prop$continent <- NA
+data_no_dep_prop$continent[data_no_dep_prop$Region %in% c(
+  "europe", "eastern europe", "southern europe",
+  "eurasia", "mediterranean",
+  "northern hemisphere", "red sea"
+)] <- "Europe"
+data_no_dep_prop$continent[data_no_dep_prop$Region %in% c(
+  "asia", "east asia"
+)] <- "Asia"
+data_no_dep_prop$continent[data_no_dep_prop$Region %in% c(
+  "north america", "us"
+)] <- "North America"
+data_no_dep_prop$continent[data_no_dep_prop$Region %in% c(
+  "south america", "central america"
+)] <- "South America"
+data_no_dep_prop$continent[data_no_dep_prop$Region %in% c(
+  "australia", "pacific ocean"
+)] <- "Australia and Oceania"
+data_no_dep_prop$continent[data_no_dep_prop$Region %in% c(
+  "africa", "south africa"
+)] <- "Africa"
+
+data_no_dep_prop$continent <- factor(data_no_dep_prop$continent)
+table(data_no_dep_prop$continent, useNA = "ifany")
+
+mod_results_a14 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$continent <- droplevels(dat_ncp$continent)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$continent) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ continent - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$continent,
+                        length)
+  
+  groups_clean <- gsub("continent", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  if (n == "Water purification") {
+    arrow_length <- 1
+    alim_use <- c(-4, 4)
+  }  else if (n == "Pollination") {
+    arrow_length <- 1
+    alim_use <- c(-1, 4) 
+  } else if (n == "Fire regulation") {
+    arrow_length <- 2.5
+    alim_use <- c(-8, 4) 
+  }  else {
+    arrow_length <- 2.5
+    alim_use <- c(-8, 8)
+  }
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  # change if neede 
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a14 <- rbind(
+      mod_results_a14,
+      data.frame(
+        ncp = n,
+        moderator = "continent",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+write.csv(mod_results_a14,
+          "moderator_continent_results.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+## for prop data
+unique(data_prop$Region)
+data_prop$Region <- tolower(trimws(data_prop$Region))
+data_prop$Region[data_prop$Region == "-"] <- NA
+data_prop$continent <- NA
+data_prop$continent[data_prop$Region %in% c(
+  "europe", "eastern europe", "southern europe",
+  "eurasia", "mediterranean",
+  "northern hemisphere", "red sea"
+)] <- "Europe"
+data_prop$continent[data_prop$Region %in% c(
+  "asia", "east asia"
+)] <- "Asia"
+data_prop$continent[data_prop$Region %in% c(
+  "north america", "us"
+)] <- "North America"
+data_prop$continent[data_prop$Region %in% c(
+  "south america", "central america"
+)] <- "South America"
+data_prop$continent[data_prop$Region %in% c(
+  "australia", "pacific ocean"
+)] <- "Australia and Oceania"
+data_prop$continent[data_prop$Region %in% c(
+  "africa", "south africa"
+)] <- "Africa"
+
+data_prop$continent <- factor(data_prop$continent)
+table(data_prop$continent, useNA = "ifany")
+
+mod_results_a14p <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+
+for (n in ncps) {
+  
+  dat_ncp <- data_prop[data_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$continent <- droplevels(dat_ncp$continent)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$continent) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ continent - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$continent,
+                        length)
+  
+  groups_clean <- gsub("continent", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  
+  arrow_length <- 0.5
+  alim_use <- c(-1, 0.5)
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  # change if neede 
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a14p <- rbind(
+      mod_results_a14p,
+      data.frame(
+        ncp = n,
+        moderator = "continent",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+write.csv(mod_results_a14p,
+          "moderator_continent_results_prop.csv",
+          row.names = FALSE)
+
+
+```
+
+```{r}
+unique(data_no_dep_prop$Invader_species_name)
+ncps <- unique(data_no_dep_prop$ncp_1)
+data_no_dep_prop$Invader_species_name <- factor(data_no_dep_prop$Invader_species_name)
+mod_results_a15 <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_no_dep_prop[data_no_dep_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$Invader_species_name <- droplevels(dat_ncp$Invader_species_name)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$Invader_species_name) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ Invader_species_name - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$Invader_species_name,
+                        length)
+  
+  groups_clean <- gsub("Invader_species_name", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  
+    arrow_length <- 10
+    alim_use <- c(-12, 20)
+  
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a15 <- rbind(
+      mod_results_a15,
+      data.frame(
+        ncp = n,
+        moderator = "Invader_species_name",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+
+
+```
+
+```{r}
+# for prop data
+unique(data_prop$Invader_species_name)
+ncps <- unique(data_prop$ncp_1)
+data_prop$Invader_species_name <- factor(data_prop$Invader_species_name)
+mod_results_a15p <- data.frame(
+  ncp = character(),
+  moderator = character(),
+  level = character(),
+  estimate = numeric(),
+  ci_lb = numeric(),
+  ci_ub = numeric(),
+  pval = numeric(),
+  k = integer(),
+  QM = numeric(),
+  QM_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (n in ncps) {
+  
+  dat_ncp <- data_prop[data_prop$ncp_1 == n, ]
+  
+  # Minimum size check
+  if (nrow(dat_ncp) < 5) next
+  
+  # drop unused factors
+  dat_ncp$Invader_species_name <- droplevels(dat_ncp$Invader_species_name)
+  
+  # check that ≥2 levels remain
+  if (nlevels(dat_ncp$Invader_species_name) < 2) next
+  
+  m_mod <- rma.mv(
+    yi_dir,
+    vi,
+    mods = ~ Invader_species_name - 1,
+    random = ~ 1 | ID,
+    data = dat_ncp,
+    method = "REML"
+  )
+  
+  # ---- Extract ----
+  est    <- as.numeric(m_mod$b)
+  ci_lb  <- m_mod$ci.lb
+  ci_ub  <- m_mod$ci.ub
+  groups <- rownames(m_mod$b)
+  
+  k_per_group <- tapply(dat_ncp$yi_dir,
+                        dat_ncp$Invader_species_name,
+                        length)
+  
+  groups_clean <- gsub("Invader_species_name", "", groups)
+  
+  groups_k <- paste0(groups_clean,
+                     " (k = ",
+                     k_per_group[groups_clean],
+                     ")")
+  
+  
+  arrow_length <- 1
+  alim_use <- c(-2, 2)
+  
+  par(mar = c(8, 4, 4, 2))   # bigger bottom margin
+  # ---- Plot ----
+  forest(
+    x = est,
+    ci.lb = ci_lb,
+    ci.ub = ci_ub,
+    slab = groups_k,
+    refline = 0,
+    xlab = "Standardised effect size (Hedges' g)",
+    main = paste(n),
+    alim = alim_use,
+  )
+  
+  usr <- par("usr") 
+  mid <- 0  
+  
+  y_arrow <- usr[3] + 0.2   # slightly below plot
+  y_text  <- usr[3] + 0.5   # text further below
+  
+  arrows(mid, y_arrow, mid - arrow_length, y_arrow, col="red", lwd=2, length=0.08) 
+  arrows(mid, y_arrow, mid + arrow_length, y_arrow, col="darkgreen", lwd=2, length=0.08) 
+  
+  text((mid - arrow_length), y_text, "Decreased function", col="red") 
+  text((mid + arrow_length), y_text, "Increased function", col="darkgreen")
+  
+  # ---- Store results ----
+  QM <- m_mod$QM
+  QM_p <- m_mod$QMp
+  
+  for (i in seq_along(groups)) {
+    mod_results_a15p <- rbind(
+      mod_results_a15p,
+      data.frame(
+        ncp = n,
+        moderator = "Invader_species_name",
+        level = groups[i],
+        estimate = est[i],
+        ci_lb = ci_lb[i],
+        ci_ub = ci_ub[i],
+        pval = summary(m_mod)$pval[i],
+        k = m_mod$k,
+        QM = QM,
+        QM_pval = QM_p,
+        stringsAsFactors = FALSE
+      )
+    )
+  }
+}
+```
+
